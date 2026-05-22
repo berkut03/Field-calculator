@@ -3,6 +3,16 @@ from tkinter import ttk, messagebox, simpledialog, filedialog
 import json
 import os
 
+def resource_path(relative_path):
+    """ PyInstaller로 빌드된 환경과 일반 파이썬 환경 모두에서 절대 경로를 찾아주는 함수 """
+    try:
+        # PyInstaller가 만든 임시 폴더 경로
+        base_path = sys._MEIPASS
+    except Exception:
+        # 일반 파이썬으로 실행할 때의 원래 경로
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
 class ToolTip:
     def __init__(self, widget, text):
         self.widget = widget
@@ -70,8 +80,10 @@ class OpticalCalculatorApp:
         self.root.title("R-Guide 및 레티클 설계 계산기 (SolidWorks 연동형)")
         
         try:
-            self.root.iconbitmap("icon2.ico")
-        except Exception:
+            icon_path = resource_path("icon2.ico")
+            self.root.iconbitmap(icon_path)
+        except Exception as e:
+            print(f"아이콘 로드 실패: {e}")
             pass
 
         self.root.geometry("1150x720")
@@ -336,7 +348,8 @@ class OpticalCalculatorApp:
         dialog.title("SolidWorks 수식 내보내기")
 
         try:
-            dialog.iconbitmap("icon2.ico")
+            icon_path = resource_path("icon2.ico")
+            dialog.iconbitmap(icon_path)
         except Exception:
             pass
 
