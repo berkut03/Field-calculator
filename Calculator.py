@@ -16,20 +16,20 @@ class OpticalCalculatorApp:
 
         # 데이터 변수 초기화
         self.vars = {
-            'collimatorEfl': tk.DoubleVar(value=""),
-            'pixelSizeUm': tk.DoubleVar(value=""),
-            'roiWidth': tk.DoubleVar(value=640.0),
-            'roiHeight': tk.DoubleVar(value=480.0),
-            'imageCircle': tk.DoubleVar(value=""),
-            'eflTele': tk.DoubleVar(value=""),
-            'fovTele': tk.DoubleVar(value=""),
+            'collimatorEfl': tk.StringVar(value=""),
+            'pixelSizeUm': tk.StringVar(value=""),
+            'roiWidth': tk.StringVar(value="640.0"),
+            'roiHeight': tk.StringVar(value="480.0"),
+            'imageCircle': tk.StringVar(value=""),
+            'eflTele': tk.StringVar(value=""),
+            'fovTele': tk.StringVar(value=""),
             'enableTele': tk.BooleanVar(value=True),
             'enableMid': tk.BooleanVar(value=False),
-            'eflMid': tk.DoubleVar(value=""),
-            'fovMid': tk.DoubleVar(value=""),
+            'eflMid': tk.StringVar(value=""),
+            'fovMid': tk.StringVar(value=""),
             'enableWide': tk.BooleanVar(value=False),
-            'eflWide': tk.DoubleVar(value=""),
-            'fovWide': tk.DoubleVar(value=""),
+            'eflWide': tk.StringVar(value=""),
+            'fovWide': tk.StringVar(value=""),
         }
 
         # TELE/MID/WIDE 입력 필드 참조 저장
