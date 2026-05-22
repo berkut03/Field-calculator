@@ -3,12 +3,79 @@ from tkinter import ttk, messagebox, simpledialog, filedialog
 import json
 import os
 
+class ToolTip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tip_window = None
+        self.widget.bind("<Enter>", self.show_tip)
+        self.widget.bind("<Leave>", self.hide_tip)
+
+    def show_tip(self, event=None):
+        if self.tip_window or not self.text:
+            return
+        
+        # 툴팁 표시 위치 설정 (마우스 커서보다 살짝 아래/오른쪽)
+        x = self.widget.winfo_rootx() + 25
+        y = self.widget.winfo_rooty() + 25
+
+        self.tip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True) # 윈도우 테두리 제거
+        tw.wm_geometry(f"+{x}+{y}")
+
+        # 💡 [핵심] 윈도우 배경을 '마젠타(자홍색)'로 칠하고, 윈도우에서 마젠타색을 투명하게 뚫어버립니다.
+        try:
+            tw.wm_attributes("-transparentcolor", "magenta")
+        except Exception:
+            pass # 혹시 윈도우 환경이 아닐 경우 뻗지 않도록 예외 처리
+
+        # 텍스트 크기를 미리 계산해서 말풍선 크기(w, h) 정하기
+        temp_label = tk.Label(tw, text=self.text, font=("Arial", 9), justify=tk.LEFT)
+        temp_label.update_idletasks()
+        w = temp_label.winfo_reqwidth() + 24  # 좌우 넉넉한 여백
+        h = temp_label.winfo_reqheight() + 16 # 상하 넉넉한 여백
+        temp_label.destroy()
+
+        # 투명해질 마젠타색 배경을 가진 도화지(Canvas) 깔기
+        canvas = tk.Canvas(tw, width=w, height=h, bg="magenta", highlightthickness=0)
+        canvas.pack()
+
+        # --- 동글동글한 모서리 모양 만들기 ---
+        d = 24 # 모서리의 둥근 정도 (숫자가 클수록 더 둥글어짐)
+        x1, y1 = 1, 1
+        x2, y2 = w - 1, h - 1
+        bg_color = "#FFFFE0"  # 부드러운 연노랑색
+        
+        # 1. 네 모서리에 동그라미 그리기
+        canvas.create_oval(x1, y1, x1+d, y1+d, fill=bg_color, outline=bg_color)
+        canvas.create_oval(x2-d, y1, x2, y1+d, fill=bg_color, outline=bg_color)
+        canvas.create_oval(x1, y2-d, x1+d, y2, fill=bg_color, outline=bg_color)
+        canvas.create_oval(x2-d, y2-d, x2, y2, fill=bg_color, outline=bg_color)
+        
+        # 2. 가운데 빈 공간을 직사각형 2개(십자가 모양)로 채워서 하나의 둥근 상자로 합치기
+        canvas.create_rectangle(x1+d/2, y1, x2-d/2, y2, fill=bg_color, outline=bg_color)
+        canvas.create_rectangle(x1, y1+d/2, x2, y2-d/2, fill=bg_color, outline=bg_color)
+
+        # 3. 완성된 둥근 상자 정중앙에 텍스트 얹기
+        canvas.create_text(w/2, h/2, text=self.text, font=("Arial", 9), justify=tk.LEFT, fill="#333333")
+
+    def hide_tip(self, event=None):
+        if self.tip_window:
+            self.tip_window.destroy()
+            self.tip_window = None
+
 class OpticalCalculatorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("R-Guide 및 레티클 설계 계산기 (SolidWorks 연동형)")
-        self.root.geometry("1150x720")
         
+        try:
+            self.root.iconbitmap("icon2.ico")
+        except Exception:
+            pass
+
+        self.root.geometry("1150x720")
+    
         # 저장 폴더 설정
         self.save_dir = "Saved_Models"
         if not os.path.exists(self.save_dir):
@@ -35,7 +102,7 @@ class OpticalCalculatorApp:
         # TELE/MID/WIDE 입력 필드 참조 저장
         self.lens_entries = {'Tele': [], 'Mid': [], 'Wide': []}
 
-        # 입력값이 바뀔 때마다 자동 계산 및 체크박스 상태 감지
+        # 입력값이 바뀔 때마다 자동 계산 및 체크박스 상태 감지 - 자동 계산 기능 삭제 
         for key, var in self.vars.items():
            # var.trace_add("write", lambda *args: self.calculate())
             if key in ['enableTele', 'enableMid', 'enableWide']:
@@ -86,7 +153,7 @@ class OpticalCalculatorApp:
         
         self.create_input_group(input_frame, "콜리메이터부 (Collimator)", [
             ("콜리메이터 EFL (mm)", 'collimatorEfl'),
-            ("카메라 픽셀 크기 (㎛)", 'pixelSizeUm'),
+            ("카메라 픽셀 크기 (㎛)", 'pixelSizeUm', "자주 사용하는 픽셀 크기\n - XCL-C30: 7.4\n - usb type: 6.9"),
             ("ROI 가로 (px)", 'roiWidth'),
             ("ROI 세로 (px)", 'roiHeight')
         ], 0, 0)
@@ -141,9 +208,20 @@ class OpticalCalculatorApp:
     def create_input_group(self, parent, title, items, row, col):
         frame = ttk.LabelFrame(parent, text=title, padding=10)
         frame.grid(row=row, column=col, padx=5, sticky="nw")
-        for i, (label, var_name) in enumerate(items):
-            ttk.Label(frame, text=label).grid(row=i, column=0, sticky="w", pady=2)
-            ttk.Entry(frame, textvariable=self.vars[var_name], width=10).grid(row=i, column=1, padx=5, pady=2)
+        for i, item in enumerate(items):
+            label_text = item[0]
+            var_name = item[1]
+            hint = item[2] if len(item) > 2 else ""
+            
+            ttk.Label(frame, text=label_text).grid(row=i, column=0, sticky="w", pady=2)
+            
+            # 입력창 생성
+            entry = ttk.Entry(frame, textvariable=self.vars[var_name], width=10)
+            entry.grid(row=i, column=1, padx=5, pady=2)
+            
+            # 힌트가 있으면 툴팁 연결
+            if hint:
+                ToolTip(entry, hint)
 
     def create_lens_inputs(self, parent, mode, start_row):
         ttk.Label(parent, text="EFL(mm):").grid(row=start_row, column=0, sticky="w")
@@ -256,6 +334,12 @@ class OpticalCalculatorApp:
         # 2. 다이얼로그 생성 및 창 크기 고정
         dialog = tk.Toplevel(self.root)
         dialog.title("SolidWorks 수식 내보내기")
+
+        try:
+            dialog.iconbitmap("icon2.ico")
+        except Exception:
+            pass
+
         dialog.geometry("340x250") # 레이아웃 추가로 인해 세로 길이를 250으로 확장
         dialog.resizable(False, False)
         dialog.transient(self.root)
