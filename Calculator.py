@@ -37,7 +37,7 @@ class OpticalCalculatorApp:
 
         # 입력값이 바뀔 때마다 자동 계산 및 체크박스 상태 감지
         for key, var in self.vars.items():
-            var.trace_add("write", lambda *args: self.calculate())
+           # var.trace_add("write", lambda *args: self.calculate())
             if key in ['enableTele', 'enableMid', 'enableWide']:
                 var.trace_add("write", lambda *args: self.toggle_inputs())
 
@@ -47,7 +47,7 @@ class OpticalCalculatorApp:
         self.refresh_list()
 
         self.toggle_inputs()  # 초기 상태에 맞게 입력 필드 활성화/비활성화
-        self.calculate()
+       # self.calculate()
 
     def create_ui(self):
         # 버튼 스타일
@@ -110,6 +110,10 @@ class OpticalCalculatorApp:
         ttk.Checkbutton(field_frame, text="WIDE 활성화", variable=self.vars['enableWide']).grid(row=4, column=0, columnspan=4, sticky="w", pady=(5,0))
         self.create_lens_inputs(field_frame, 'Wide', 5)
 
+        # 계산 버튼
+        btn_calc = ttk.Button(right_frame, text="계산 실행", command=self.calculate, style="Center.TButton")
+        btn_calc.pack(fill=tk.X, pady=(0, 15), ipady=8)
+
         # 테이블부
         table_frame = ttk.LabelFrame(right_frame, text="필드별 상세 설계 데이터 (0.10F ~ 0.90F)", padding=10)
         table_frame.pack(fill=tk.BOTH, expand=True)
@@ -119,11 +123,11 @@ class OpticalCalculatorApp:
         
         self.tree.heading("field", text="필드 (F)")
         self.tree.heading("tele_a", text="TELE 각도(°)")
-        self.tree.heading("tele_d", text="TELE 직경(mm)")
+        self.tree.heading("tele_d", text="TELE 레티클 직경(mm)")
         self.tree.heading("mid_a", text="MID 각도(°)")
-        self.tree.heading("mid_d", text="MID 직경(mm)")
+        self.tree.heading("mid_d", text="MID 레티클 직경(mm)")
         self.tree.heading("wide_a", text="WIDE 각도(°)")
-        self.tree.heading("wide_d", text="WIDE 직경(mm)")
+        self.tree.heading("wide_d", text="WIDE 레티클 직경(mm)")
         
         for col in columns:
             self.tree.column(col, width=95, anchor="center")
@@ -206,19 +210,19 @@ class OpticalCalculatorApp:
                 row = [f"{f:.2f}"]
 
                 if e_tele:
-                    r_tele_a = (self.vars['fovTele'].get() / 2) * f
+                    r_tele_a = (fov_tele / 2) * f
                     r_tele_d = (ic * f) / m_tele
                     row.extend([f"{r_tele_a:.3f}", f"{r_tele_d:.3f}"])
                 else:
                     row.extend(["-", "-"])
                 
                 if e_mid:
-                    row.extend([f"{(self.vars['fovMid'].get() / 2) * f:.3f}", f"{(ic * f) / m_mid:.3f}"])
+                    row.extend([f"{(fov_mid / 2) * f:.3f}", f"{(ic * f) / m_mid:.3f}"])
                 else:
                     row.extend(["-", "-"])
                     
                 if e_wide:
-                    row.extend([f"{(self.vars['fovWide'].get() / 2) * f:.3f}", f"{(ic * f) / m_wide:.3f}"])
+                    row.extend([f"{(fov_wide / 2) * f:.3f}", f"{(ic * f) / m_wide:.3f}"])
                 else:
                     row.extend(["-", "-"])
                     
@@ -234,8 +238,10 @@ class OpticalCalculatorApp:
             if e_wide: summary += get_sum("WIDE", m_wide)
             self.summary_label.config(text=summary)
             
-        except Exception:
-            pass
+        except ValueError:
+            messagebox.showwarning("입력 오류", "계산에 필요한 숫자가 모두 입력되지 않았거나 문자가 포함되어 있습니다.\n\n빈칸을 모두 채운 후 다시 '계산 실행'을 눌러주세요.")
+        except Exception as e:
+            messagebox.showerror("계산 오류", f"계산중 오류가 발생했습니다:\n{e}")
 
     def export_to_solidworks(self):
         # 1. 활성화된 모드 수집
