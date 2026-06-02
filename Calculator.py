@@ -139,6 +139,24 @@ class OpticalCalculatorApp:
         
         ttk.Label(left_frame, text="저장된 모델 목록", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(0, 10))
         
+        # 검색어 입력창 (실시간 분류)
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add("write", lambda *args: self.refresh_list())
+        search_entry = ttk.Entry(left_frame, textvariable=self.search_var)
+        search_entry.pack(fill=tk.X, pady=(0, 5))
+
+        if 'ToolTip' in globals():
+            ToolTip(search_entry, "모델 이름의 일부를 입력하면\n해당 모델만 필터링 됩니다.")
+        
+        #정렬 방식 콤보박스
+        self.sort_var = tk.StringVar()
+        sort_combo = ttk.Combobox(left_frame, textvariable=self.sort_var, state="readonly")
+        sort_combo['values'] = ("이름 오름차순 (A-Z)", "이름 내림차순 (Z-A)", "최신 수정순", "오래된 순")
+        sort_combo.current(0)
+        sort_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh_list())
+        sort_combo.pack(fill=tk.X, pady=(0, 10))
+
+        #리스트 박스
         self.listbox = tk.Listbox(left_frame, width=25, height=18)
         self.listbox.pack(fill=tk.Y, expand=False, pady=(0, 10))
         self.listbox.bind('<<ListboxSelect>>', self.on_list_select)
@@ -434,9 +452,34 @@ class OpticalCalculatorApp:
     # --- 파일 관리 기능 ---
     def refresh_list(self):
         self.listbox.delete(0, tk.END)
+        
+        # 검색어 및 정렬 옵션 가져오기 (프로그램 초기 로딩 시 변수가 없을 때를 대비한 예외처리 포함)
+        search_query = self.search_var.get().lower() if hasattr(self, 'search_var') else ""
+        sort_mode = self.sort_var.get() if hasattr(self, 'sort_var') else "이름 오름차순 (A-Z)"
+
+        files_info = []
         for f in os.listdir(self.save_dir):
             if f.endswith(".json"):
-                self.listbox.insert(tk.END, f.replace(".json", ""))
+                name = f.replace(".json", "")
+                # 검색어가 포함된 모델만 걸러냄 (실시간 필터링)
+                if search_query in name.lower():
+                    path = os.path.join(self.save_dir, f)
+                    mtime = os.path.getmtime(path) # 수정된 날짜 및 시간 가져오기
+                    files_info.append((name, mtime))
+
+        # 선택된 옵션에 따라 리스트 정렬
+        if sort_mode == "이름 오름차순 (A-Z)":
+            files_info.sort(key=lambda x: x[0].lower())
+        elif sort_mode == "이름 내림차순 (Z-A)":
+            files_info.sort(key=lambda x: x[0].lower(), reverse=True)
+        elif sort_mode == "최신 수정순":
+            files_info.sort(key=lambda x: x[1], reverse=True)
+        elif sort_mode == "오래된 순":
+            files_info.sort(key=lambda x: x[1])
+
+        # 정렬된 결과를 리스트박스에 삽입
+        for name, _ in files_info:
+            self.listbox.insert(tk.END, name)
 
     def get_current_data(self):
         return {k: v.get() for k, v in self.vars.items()}
