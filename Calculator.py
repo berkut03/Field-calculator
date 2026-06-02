@@ -114,6 +114,11 @@ class OpticalCalculatorApp:
         # TELE/MID/WIDE 입력 필드 참조 저장
         self.lens_entries = {'Tele': [], 'Mid': [], 'Wide': []}
 
+        #필드별 태그 저장용 변수
+        self.field_tags = {}
+        self.tree_tooltip = None
+        self.current_hover_item = None
+
         # 입력값이 바뀔 때마다 자동 계산 및 체크박스 상태 감지 - 자동 계산 기능 삭제 
         for key, var in self.vars.items():
            # var.trace_add("write", lambda *args: self.calculate())
@@ -157,7 +162,7 @@ class OpticalCalculatorApp:
         sort_combo.pack(fill=tk.X, pady=(0, 10))
 
         #리스트 박스
-        self.listbox = tk.Listbox(left_frame, width=25, height=18)
+        self.listbox = tk.Listbox(left_frame, width=25, height=15)
         self.listbox.pack(fill=tk.Y, expand=False, pady=(0, 10))
         self.listbox.bind('<<ListboxSelect>>', self.on_list_select)
         
@@ -230,6 +235,12 @@ class OpticalCalculatorApp:
             self.tree.column(col, width=95, anchor="center")
         
         self.tree.pack(fill=tk.BOTH, expand=True)
+
+        # 태그 색상 지정 및 마우스 이벤트 연결
+        self.tree.tag_configure('tagged', background='#C8E6C9') # 태그 배경색 (초록색)
+        self.tree.bind("<Button-3>", self.show_context_menu)
+        self.tree.bind("<Motion>", self.on_tree_hover)
+        self.tree.bind("<Leave>", self.hide_tree_tooltip)
 
         # 요약부
         self.summary_label = ttk.Label(right_frame, text="", font=("Consolas", 10), justify=tk.LEFT)
@@ -334,7 +345,10 @@ class OpticalCalculatorApp:
                 else:
                     row.extend(["-", "-"])
                     
-                self.tree.insert("", tk.END, values=row)
+                item = self.tree.insert("", tk.END, values=row)
+                f_str = f"{f:.2f}"
+                if f_str in self.field_tags:
+                    self.tree.item(item, tags=('tagged',))
 
             # 요약 데이터
             summary = "[가공 및 세팅 참고 데이터]\n"
@@ -350,7 +364,67 @@ class OpticalCalculatorApp:
             messagebox.showwarning("입력 오류", "계산에 필요한 숫자가 모두 입력되지 않았거나 문자가 포함되어 있습니다.\n\n빈칸을 모두 채운 후 다시 '계산 실행'을 눌러주세요.")
         except Exception as e:
             messagebox.showerror("계산 오류", f"계산중 오류가 발생했습니다:\n{e}")
+    
+    # 우클릭 메뉴 및 표 툴팁 기능
+    def show_context_menu(self, event):
+        item = self.tree.identify_row(event.y)
+        if not item: return
 
+        self.tree.selection_set(item) # 클릭한 줄 선택
+        f_val = self.tree.item(item, "values")[0] # 예: "0.10" (필드 값)
+
+        menu = tk.Menu(self.root, tearoff=0)
+        if f_val in self.field_tags:
+            menu.add_command(label="태그 수정", command=lambda: self.add_tag(item, f_val))
+            menu.add_command(label="태그 삭제", command=lambda: self.remove_tag(item, f_val))
+        else:
+            menu.add_command(label="태그 추가", command=lambda: self.add_tag(item, f_val))
+        
+        menu.post(event.x_root, event.y_root)
+
+    def add_tag(self, item, f_val):
+        current_text = self.field_tags.get(f_val, "")
+        new_text = simpledialog.askstring("태그 입력", f"[{f_val}F] 필드에 추가할 태그를 입력하세요:", initialvalue=current_text)
+        
+        if new_text is not None: 
+            if new_text.strip() == "": # 빈칸으로 확인을 누르면 삭제 처리
+                self.remove_tag(item, f_val)
+            else:
+                self.field_tags[f_val] = new_text
+                self.tree.item(item, tags=('tagged',)) # 형광펜 칠하기
+
+    def remove_tag(self, item, f_val):
+        if f_val in self.field_tags:
+            del self.field_tags[f_val]
+            self.tree.item(item, tags=()) # 형광펜 지우기
+            self.hide_tree_tooltip()
+
+    def on_tree_hover(self, event):
+        item = self.tree.identify_row(event.y)
+        if not item:
+            self.hide_tree_tooltip()
+            return
+
+        if item != self.current_hover_item:
+            self.hide_tree_tooltip()
+            self.current_hover_item = item
+            f_val = self.tree.item(item, "values")[0]
+            
+            if f_val in self.field_tags:
+                x, y = event.x_root + 15, event.y_root + 15
+                self.tree_tooltip = tw = tk.Toplevel(self.root)
+                tw.wm_overrideredirect(True)
+                tw.wm_geometry(f"+{x}+{y}")
+                tw.attributes("-topmost", True)
+                tk.Label(tw, text=self.field_tags[f_val], justify=tk.LEFT, background="#ffffe0", relief=tk.SOLID, borderwidth=1, font=("Arial", 9)).pack(ipadx=4, ipady=4)
+
+    def hide_tree_tooltip(self, event=None):
+        if self.tree_tooltip:
+            self.tree_tooltip.destroy()
+            self.tree_tooltip = None
+        self.current_hover_item = None
+    
+    # 솔리드웍스 연동
     def export_to_solidworks(self):
         # 1. 활성화된 모드 수집
         active_modes = []
@@ -482,7 +556,9 @@ class OpticalCalculatorApp:
             self.listbox.insert(tk.END, name)
 
     def get_current_data(self):
-        return {k: v.get() for k, v in self.vars.items()}
+        data = {k: v.get() for k, v in self.vars.items()}
+        data['field_tags'] = self.field_tags # --- [추가 5-A]
+        return data
 
     def on_list_select(self, event):
         selection = self.listbox.curselection()
@@ -492,15 +568,18 @@ class OpticalCalculatorApp:
             path = os.path.join(self.save_dir, f"{name}.json")
             with open(path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+                self.field_tags = data.get('field_tags', {})
                 for k, v in data.items():
                     if k in self.vars:
                         self.vars[k].set(v)
             self.root.title(f"R-Guide 계산기 - [{name}]")
+            self.calculate()
 
     def new_file(self):
         self.current_file = None
         self.root.title("R-Guide 및 레티클 설계 계산기 (새 파일)")
         self.listbox.selection_clear(0, tk.END)
+        self.field_tags.clear()
 
         for k, v in self.vars.items():
             if isinstance(v, tk.StringVar):
