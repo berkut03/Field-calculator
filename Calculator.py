@@ -2,6 +2,12 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, filedialog
 import json
 import os
+import shutil
+import sys
+import urllib.request
+import ssl
+import webbrowser
+
 
 def resource_path(relative_path):
     """ PyInstaller로 빌드된 환경과 일반 파이썬 환경 모두에서 절대 경로를 찾아주는 함수 """
@@ -77,7 +83,8 @@ class ToolTip:
 class OpticalCalculatorApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("R-Guide 및 레티클 설계 계산기 (SolidWorks 연동형)")
+        self.current_version = "v1.2.0"
+        self.root.title(f"R-Guide 계산기 - {self.current_version}")
         
         try:
             icon_path = resource_path("icon2.ico")
@@ -89,9 +96,24 @@ class OpticalCalculatorApp:
         self.root.geometry("1150x720")
     
         # 저장 폴더 설정
+        self.config_file = resource_path("config.json")
         self.save_dir = "Saved_Models"
+
+        if os.path.exists(self.config_file):
+            try:
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    self.save_dir = config.get("save_dir", "Saved_Models")
+            except Exception:
+                pass
+
         if not os.path.exists(self.save_dir):
-            os.makedirs(self.save_dir)
+            try:
+                os.makedirs(self.save_dir)
+            except Exception:
+                self.save_dir = "Saved_Modles"
+                if not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir)
 
         # 데이터 변수 초기화
         self.vars = {
@@ -129,9 +151,8 @@ class OpticalCalculatorApp:
 
         self.create_ui()
         self.refresh_list()
-
         self.toggle_inputs()  # 초기 상태에 맞게 입력 필드 활성화/비활성화
-       # self.calculate()
+        self.root.after(1000, self.check_for_updates)
 
     def create_ui(self):
         # 버튼 스타일
@@ -153,7 +174,7 @@ class OpticalCalculatorApp:
         if 'ToolTip' in globals():
             ToolTip(search_entry, "모델 이름의 일부를 입력하면\n해당 모델만 필터링 됩니다.")
         
-        #정렬 방식 콤보박스
+        # 정렬 방식 콤보박스
         self.sort_var = tk.StringVar()
         sort_combo = ttk.Combobox(left_frame, textvariable=self.sort_var, state="readonly")
         sort_combo['values'] = ("이름 오름차순 (A-Z)", "이름 내림차순 (Z-A)", "최신 수정순", "오래된 순")
@@ -161,8 +182,8 @@ class OpticalCalculatorApp:
         sort_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh_list())
         sort_combo.pack(fill=tk.X, pady=(0, 10))
 
-        #리스트 박스
-        self.listbox = tk.Listbox(left_frame, width=25, height=15)
+        # 리스트 박스
+        self.listbox = tk.Listbox(left_frame, width=25, height=11)
         self.listbox.pack(fill=tk.Y, expand=False, pady=(0, 10))
         self.listbox.bind('<<ListboxSelect>>', self.on_list_select)
         
@@ -172,6 +193,20 @@ class OpticalCalculatorApp:
         ttk.Button(left_frame, text="다른 이름 저장 (복사)", command=self.save_as_file).pack(fill=tk.X, pady=2)
         ttk.Button(left_frame, text="삭제", command=self.delete_file).pack(fill=tk.X, pady=(2, 20))
         
+        # 가져오기/ 내보내기
+        ttk.Separator(left_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=5)
+        ttk.Button(left_frame, text="모델 가져오기", command=self.import_models).pack(fill=tk.X, pady=2)
+        ttk.Button(left_frame, text="모델 내보내기", command=self.export_models).pack(fill=tk.X, pady=(2,20))
+
+        # 폴더 변경
+        ttk.Separator(left_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=5) # 구분선
+        ttk.Button(left_frame, text="저장 폴더 변경", command=self.change_save_dir).pack(fill=tk.X, pady=2)
+
+        # 폴더 경로 표기
+        folder_name = os.path.basename(self.save_dir) if self.save_dir else "알 수 없음"
+        self.dir_label = ttk.Label(left_frame, text=f"위치: {folder_name}", foreground="gray", font=("Arial", 8))
+        self.dir_label.pack(anchor=tk.W, pady=(0, 20))
+
         # 솔리드웍스 연동 섹션
         sw_frame = ttk.LabelFrame(left_frame, text="SolidWorks 연동", padding=10)
         sw_frame.pack(fill=tk.X, side=tk.BOTTOM, pady=10)
@@ -557,7 +592,7 @@ class OpticalCalculatorApp:
 
     def get_current_data(self):
         data = {k: v.get() for k, v in self.vars.items()}
-        data['field_tags'] = self.field_tags # --- [추가 5-A]
+        data['field_tags'] = self.field_tags
         return data
 
     def on_list_select(self, event):
@@ -572,12 +607,12 @@ class OpticalCalculatorApp:
                 for k, v in data.items():
                     if k in self.vars:
                         self.vars[k].set(v)
-            self.root.title(f"R-Guide 계산기 - [{name}]")
+            self.root.title(f"R-Guide 계산기 - {self.current_version} - [{name}]")
             self.calculate()
 
     def new_file(self):
         self.current_file = None
-        self.root.title("R-Guide 및 레티클 설계 계산기 (새 파일)")
+        self.root.title(f"R-Guide 계산기 - {self.current_version} - [새 파일]")
         self.listbox.selection_clear(0, tk.END)
         self.field_tags.clear()
 
@@ -615,7 +650,7 @@ class OpticalCalculatorApp:
             with open(path, 'w', encoding='utf-8') as f:
                 json.dump(self.get_current_data(), f, indent=4)
             self.refresh_list()
-            self.root.title(f"R-Guide 계산기 - [{name}]")
+            self.root.title(f"R-Guide 계산기 - {self.current_version} - [{name}]")
 
     def delete_file(self):
         if self.current_file:
@@ -623,7 +658,128 @@ class OpticalCalculatorApp:
                 os.remove(os.path.join(self.save_dir, f"{self.current_file}.json"))
                 self.current_file = None
                 self.refresh_list()
-                self.root.title("R-Guide 계산기")
+                self.root.title(f"R-Guide 계산기 - {self.current_version}")
+
+    def import_models(self):
+        files = filedialog.askopenfilenames(
+            title="외부 모델(JSON) 가져오기",
+            filetypes=[("JSON Files", "*.json")]
+        )
+        if not files: return
+
+        count = 0
+        for f_path in files:
+            name = os.path.basename(f_path)
+            dest = os.path.join(self.save_dir, name)
+            
+            # 같은 이름의 모델이 있으면 덮어쓸지 확인
+            if os.path.exists(dest):
+                if not messagebox.askyesno("덮어쓰기", f"'{name}' 모델이 이미 존재합니다. 덮어쓰시겠습니까?"):
+                    continue
+            try:
+                shutil.copy2(f_path, dest)
+                count += 1
+            except Exception as e:
+                messagebox.showerror("에러", f"'{name}' 가져오기 실패:\n{e}")
+        
+        if count > 0:
+            self.refresh_list()
+            messagebox.showinfo("가져오기 완료", f"{count}개의 모델을 성공적으로 가져왔습니다.")
+
+    def export_models(self):
+        if not os.listdir(self.save_dir):
+            messagebox.showinfo("알림", "내보낼 모델이 없습니다.")
+            return
+
+        # 사용자에게 단일 내보내기인지, 전체 백업인지 묻기
+        answer = messagebox.askyesnocancel(
+            "내보내기 방식 선택", 
+            "현재 작업 중인 모델만 내보내시겠습니까?\n\n[예] - 현재 모델만 내보내기\n[아니오] - 저장된 전체 모델 백업하기\n[취소] - 돌아가기"
+        )
+
+        if answer is None: return # 취소
+
+        if answer: # [예] 선택 시 (단일 내보내기)
+            if not self.current_file:
+                messagebox.showwarning("경고", "선택된 모델이 없습니다. 목록에서 내보낼 모델을 먼저 선택해주세요.")
+                return
+            
+            dest_file = filedialog.asksaveasfilename(
+                title=f"'{self.current_file}' 모델 내보내기",
+                initialfile=f"{self.current_file}.json",
+                defaultextension=".json",
+                filetypes=[("JSON Files", "*.json")]
+            )
+            if dest_file:
+                shutil.copy2(os.path.join(self.save_dir, f"{self.current_file}.json"), dest_file)
+                messagebox.showinfo("완료", f"'{self.current_file}' 모델을 성공적으로 내보냈습니다.")
+
+        else: # [아니오] 선택 시 (전체 폴더 백업)
+            dest_dir = filedialog.askdirectory(title="전체 모델을 백업할 폴더 선택")
+            if dest_dir:
+                count = 0
+                for f in os.listdir(self.save_dir):
+                    if f.endswith(".json"):
+                        shutil.copy2(os.path.join(self.save_dir, f), os.path.join(dest_dir, f))
+                        count += 1
+                messagebox.showinfo("백업 완료", f"총 {count}개의 모델을 지정한 폴더로 안전하게 백업했습니다.")
+
+    def change_save_dir(self):
+        new_dir = filedialog.askdirectory(title="새로운 모델 저장 폴더 선택", initialdir=self.save_dir)
+        if new_dir:
+            self.save_dir = new_dir
+            
+            # 설정 파일(config.json)에 새 경로 영구 저장
+            try:
+                config = {"save_dir": self.save_dir}
+                with open(self.config_file, 'w', encoding='utf-8') as f:
+                    json.dump(config, f)
+            except Exception as e:
+                messagebox.showwarning("경고", f"폴더는 변경되었으나 설정 저장에 실패했습니다.\n다음에 켤 때 초기화될 수 있습니다.\n{e}")
+                
+            # UI(라벨 텍스트) 업데이트
+            if hasattr(self, 'dir_label'):
+                self.dir_label.config(text=f"위치: {os.path.basename(self.save_dir)}")
+                if 'ToolTip' in globals():
+                    ToolTip(self.dir_label, f"전체 경로:\n{self.save_dir}") # 마우스 올리면 전체 경로 표시
+            
+            # 새 폴더를 바라보도록 리스트 초기화 및 갱신
+            self.current_file = None
+            self.root.title(f"R-Guide 계산기 - {self.current_version}")
+            self.refresh_list()
+            messagebox.showinfo("경로 변경", f"저장 폴더가 변경되었습니다.\n새로운 목록을 불러옵니다.")
+
+    def check_for_updates(self):
+        # [설정] 본인 깃허브에 올린 version.txt의 'Raw(원시 데이터)' 주소를 입력하세요.
+        update_url = "https://raw.githubusercontent.com/berkut03/Field-calculator/refs/heads/main/version.txt"
+
+        try:
+            # 1. 파이썬의 깐깐한 보안 인증서 검사 우회 (https 에러 방지)
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+            # 2. 깃허브에서 텍스트 파일 읽어오기
+            req = urllib.request.Request(update_url, headers={'User-Agent': 'Mozilla/5.0'})
+            
+            # timeout을 넉넉하게 5초로 늘리고, 위에서 만든 ctx(우회 설정)를 적용
+            with urllib.request.urlopen(req, timeout=5, context=ctx) as response:
+                # 3. 'utf-8-sig'를 사용해 메모장의 눈에 안 보이는 특수문자(BOM)까지 깔끔하게 제거
+                latest_version = response.read().decode('utf-8-sig').strip()
+            
+            # 4. 버전 비교
+            if latest_version and latest_version != self.current_version:
+                user_clicked_ok = messagebox.askokcancel(
+                    "업데이트 알림", 
+                    f"새로운 업데이트가 있습니다!\n\n현재 버전: {self.current_version}\n최신 버전: {latest_version}\n\n깃허브에서 최신 버전을 다운로드해주세요."
+                )
+                if user_clicked_ok:
+                    github_page_url = "https://github.com/berkut03/Field-calculator/tree/main"
+                    webbrowser.open(github_page_url)
+                
+        except Exception as e:
+            # 💡 [디버깅용] 에러가 발생하면 무시하지 말고 팝업으로 띄워서 원인을 확인합니다.
+            messagebox.showerror("업데이트 확인 에러", f"기능이 작동하지 않는 원인:\n{e}")
 
 if __name__ == "__main__":
     root = tk.Tk()
