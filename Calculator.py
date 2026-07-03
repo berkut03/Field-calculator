@@ -365,18 +365,18 @@ class OpticalCalculatorApp:
 
                 if e_tele:
                     r_tele_a = (fov_tele / 2) * f
-                    r_tele_d = (ic * f) / m_tele
+                    r_tele_d = (ic * f) * m_tele
                     row.extend([f"{r_tele_a:.3f}", f"{r_tele_d:.3f}"])
                 else:
                     row.extend(["-", "-"])
                 
                 if e_mid:
-                    row.extend([f"{(fov_mid / 2) * f:.3f}", f"{(ic * f) / m_mid:.3f}"])
+                    row.extend([f"{(fov_mid / 2) * f:.3f}", f"{(ic * f) * m_mid:.3f}"])
                 else:
                     row.extend(["-", "-"])
                     
                 if e_wide:
-                    row.extend([f"{(fov_wide / 2) * f:.3f}", f"{(ic * f) / m_wide:.3f}"])
+                    row.extend([f"{(fov_wide / 2) * f:.3f}", f"{(ic * f) * m_wide:.3f}"])
                 else:
                     row.extend(["-", "-"])
                     
@@ -388,7 +388,7 @@ class OpticalCalculatorApp:
             # 요약 데이터
             summary = "[가공 및 세팅 참고 데이터]\n"
             def get_sum(mode, m):
-                return f"{mode:5s}: H패턴 가공크기 = {((roi_w/3)*p_mm)/m:.3f} mm  |  {int(roi_w)}x{int(roi_h)} ROI 영역 = {(roi_w*p_mm)/m:.3f} x {(roi_h*p_mm)/m:.3f} mm\n"
+                return f"{mode:5s}: H패턴 가공크기 = {((roi_w/3)*p_mm)*m:.3f} mm  |  {int(roi_w)}x{int(roi_h)} ROI 영역 = {(roi_w*p_mm)*m:.3f} x {(roi_h*p_mm)*m:.3f} mm\n"
             
             if e_tele: summary += get_sum("TELE", m_tele)
             if e_mid: summary += get_sum("MIDDLE", m_mid)
