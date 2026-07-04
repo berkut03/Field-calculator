@@ -83,7 +83,7 @@ class ToolTip:
 class OpticalCalculatorApp:
     def __init__(self, root):
         self.root = root
-        self.current_version = "v1.2.0"
+        self.current_version = "v1.3.0"
         self.root.title(f"R-Guide 계산기 - {self.current_version}")
         
         try:
@@ -93,7 +93,8 @@ class OpticalCalculatorApp:
             print(f"아이콘 로드 실패: {e}")
             pass
 
-        self.root.geometry("1150x720")
+        self.root.geometry("1150x800")
+        self.root.resizable(False, False)
     
         # 저장 폴더 설정
         self.config_file = resource_path("config.json")
@@ -251,31 +252,48 @@ class OpticalCalculatorApp:
         btn_calc = ttk.Button(right_frame, text="계산 실행", command=self.calculate, style="Center.TButton")
         btn_calc.pack(fill=tk.X, pady=(0, 15), ipady=8)
 
-        # 테이블부
-        table_frame = ttk.LabelFrame(right_frame, text="필드별 상세 설계 데이터 (0.10F ~ 0.90F)", padding=10)
-        table_frame.pack(fill=tk.BOTH, expand=True)
+        # 테이블부 (260703- 2개의 표로 분리)
+        tables_container = ttk.Frame(right_frame)
+        tables_container.pack(fill=tk.BOTH, expand=True, pady=(0,5))
+
+        # 모델링용 테이블 (왼쪽)
+        model_frame = ttk.LabelFrame(tables_container, text="필드별 각도 데이터", padding=10)
+        model_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0,5))
         
-        columns = ("field", "tele_a", "tele_d", "mid_a", "mid_d", "wide_a", "wide_d")
-        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=15)
-        
-        self.tree.heading("field", text="필드 (F)")
-        self.tree.heading("tele_a", text="TELE 각도(°)")
-        self.tree.heading("tele_d", text="TELE 레티클 직경(mm)")
-        self.tree.heading("mid_a", text="MID 각도(°)")
-        self.tree.heading("mid_d", text="MID 레티클 직경(mm)")
-        self.tree.heading("wide_a", text="WIDE 각도(°)")
-        self.tree.heading("wide_d", text="WIDE 레티클 직경(mm)")
-        
-        for col in columns:
-            self.tree.column(col, width=95, anchor="center")
-        
-        self.tree.pack(fill=tk.BOTH, expand=True)
+        col_m = ("field", "tele_a", "mid_a", "wide_a")
+        self.tree_m = ttk.Treeview(model_frame, columns=col_m, show="headings", height=15)
+        self.tree_m.heading("field", text="필드(F)")
+        self.tree_m.heading("tele_a", text="TELE(°)")
+        self.tree_m.heading("mid_a", text="MID(°)")
+        self.tree_m.heading("wide_a", text="WIDE(°)")
+        self.tree_m.column("field", width=55, anchor="center", stretch=False)
+        self.tree_m.column("tele_a", width=75, anchor="center")
+        self.tree_m.column("mid_a", width=75, anchor="center")
+        self.tree_m.column("wide_a", width=75, anchor="center")
+        self.tree_m.pack(fill=tk.BOTH, expand=True)
+
+        # 레티클용 테이블 (오른쪽)
+        reticle_frame = ttk.LabelFrame(tables_container, text="필드별 레티클 직경 데이터", padding=10)
+        reticle_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5, 0))
+
+        col_r = ("field", "tele_d", "mid_d", "wide_d")
+        self.tree_r = ttk.Treeview(reticle_frame, columns=col_r, show="headings", height=15)
+        self.tree_r.heading("field", text="필드(F)")
+        self.tree_r.heading("tele_d", text="TELE(mm)")
+        self.tree_r.heading("mid_d", text="MID(mm)")
+        self.tree_r.heading("wide_d", text="WIDE(mm)")
+        self.tree_r.column("field", width=55, anchor="center", stretch=False)
+        self.tree_r.column("tele_d", width=75, anchor="center")
+        self.tree_r.column("mid_d", width=75, anchor="center")
+        self.tree_r.column("wide_d", width=75, anchor="center")
+        self.tree_r.pack(fill=tk.BOTH, expand=True)
 
         # 태그 색상 지정 및 마우스 이벤트 연결
-        self.tree.tag_configure('tagged', background='#C8E6C9') # 태그 배경색 (초록색)
-        self.tree.bind("<Button-3>", self.show_context_menu)
-        self.tree.bind("<Motion>", self.on_tree_hover)
-        self.tree.bind("<Leave>", self.hide_tree_tooltip)
+        for tree in (self.tree_m, self.tree_r):
+            tree.tag_configure('tagged', background='#C8E6C9') # 형광펜 배경색 (초록색)
+            tree.bind("<Button-3>", self.show_context_menu)
+            tree.bind("<Motion>", self.on_tree_hover)
+            tree.bind("<Leave>", self.hide_tree_tooltip)
 
         # 요약부
         self.summary_label = ttk.Label(right_frame, text="", font=("Consolas", 10), justify=tk.LEFT)
@@ -330,10 +348,11 @@ class OpticalCalculatorApp:
 
     def calculate(self):
         try:
-            for item in self.tree.get_children():
-                self.tree.delete(item)
+            for item in self.tree_m.get_children(): self.tree_m.delete(item)
+            for item in self.tree_r.get_children(): self.tree_r.delete(item)
             self.summary_label.config(text="")
 
+            # (중간 변수 선언부는 기존과 동일하므로 그대로 유지)
             e_tele = self.vars['enableTele'].get()
             e_mid = self.vars['enableMid'].get()
             e_wide = self.vars['enableWide'].get()
@@ -361,29 +380,34 @@ class OpticalCalculatorApp:
 
             for i in range(2, 19):
                 f = i * 0.05
-                row = [f"{f:.2f}"]
+                row_m = [f"{f:.2f}"] # 모델링(각도)용 행
+                row_r = [f"{f:.2f}"] # 레티클(직경)용 행
 
                 if e_tele:
-                    r_tele_a = (fov_tele / 2) * f
-                    r_tele_d = (ic * f) * m_tele
-                    row.extend([f"{r_tele_a:.3f}", f"{r_tele_d:.3f}"])
+                    row_m.append(f"{(fov_tele / 2) * f:.3f}")
+                    row_r.append(f"{(ic * f) * m_tele:.3f}")
                 else:
-                    row.extend(["-", "-"])
+                    row_m.append("-"); row_r.append("-")
                 
                 if e_mid:
-                    row.extend([f"{(fov_mid / 2) * f:.3f}", f"{(ic * f) * m_mid:.3f}"])
+                    row_m.append(f"{(fov_mid / 2) * f:.3f}")
+                    row_r.append(f"{(ic * f) * m_mid:.3f}")
                 else:
-                    row.extend(["-", "-"])
+                    row_m.append("-"); row_r.append("-")
                     
                 if e_wide:
-                    row.extend([f"{(fov_wide / 2) * f:.3f}", f"{(ic * f) * m_wide:.3f}"])
+                    row_m.append(f"{(fov_wide / 2) * f:.3f}")
+                    row_r.append(f"{(ic * f) * m_wide:.3f}")
                 else:
-                    row.extend(["-", "-"])
-                    
-                item = self.tree.insert("", tk.END, values=row)
+                    row_m.append("-"); row_r.append("-")
+
+                item_m = self.tree_m.insert("", tk.END, values=row_m)
+                item_r = self.tree_r.insert("", tk.END, values=row_r)
+
                 f_str = f"{f:.2f}"
                 if f_str in self.field_tags:
-                    self.tree.item(item, tags=('tagged',))
+                    self.tree_m.item(item_m, tags=('tagged',))
+                    self.tree_r.item(item_r, tags=('tagged',))
 
             # 요약 데이터
             summary = "[가공 및 세팅 참고 데이터]\n"
@@ -402,40 +426,59 @@ class OpticalCalculatorApp:
     
     # 우클릭 메뉴 및 표 툴팁 기능
     def show_context_menu(self, event):
-        item = self.tree.identify_row(event.y)
+        active_tree = event.widget
+        item = active_tree.identify_row(event.y)
         if not item: return
 
-        self.tree.selection_set(item) # 클릭한 줄 선택
-        f_val = self.tree.item(item, "values")[0] # 예: "0.10" (필드 값)
+        active_tree.selection_set(item) 
+        f_val = active_tree.item(item, "values")[0]
 
         menu = tk.Menu(self.root, tearoff=0)
+        # 💡 [수정] lambda v=f_val 처럼 변수를 단단하게 묶어서(Binding) 누수를 방지합니다.
         if f_val in self.field_tags:
-            menu.add_command(label="태그 수정", command=lambda: self.add_tag(item, f_val))
-            menu.add_command(label="태그 삭제", command=lambda: self.remove_tag(item, f_val))
+            menu.add_command(label="태그 수정", command=lambda v=f_val: self.add_tag(v))
+            menu.add_command(label="태그 삭제", command=lambda v=f_val: self.remove_tag(v))
         else:
-            menu.add_command(label="태그 추가", command=lambda: self.add_tag(item, f_val))
+            menu.add_command(label="태그 추가", command=lambda v=f_val: self.add_tag(v))
         
         menu.post(event.x_root, event.y_root)
 
-    def add_tag(self, item, f_val):
+    def _sync_tree_tags(self):
+        # 양쪽 표의 형광펜 상태를 한 번에 새로고침
+        for tree in (self.tree_m, self.tree_r):
+            for item in tree.get_children():
+                f_val = tree.item(item, "values")[0]
+                if f_val in self.field_tags:
+                    tree.item(item, tags=('tagged',))
+                else:
+                    tree.item(item, tags=())
+
+    def add_tag(self, f_val):
         current_text = self.field_tags.get(f_val, "")
-        new_text = simpledialog.askstring("태그 입력", f"[{f_val}F] 필드에 추가할 태그를 입력하세요:", initialvalue=current_text)
+        
+        new_text = simpledialog.askstring(
+            "태그 입력", 
+            f"[{f_val}F] 필드에 추가할 태그를 입력하세요:", 
+            initialvalue=current_text, 
+            parent=self.root
+        )
         
         if new_text is not None: 
-            if new_text.strip() == "": # 빈칸으로 확인을 누르면 삭제 처리
-                self.remove_tag(item, f_val)
+            if new_text.strip() == "":
+                self.remove_tag(f_val)
             else:
                 self.field_tags[f_val] = new_text
-                self.tree.item(item, tags=('tagged',)) # 형광펜 칠하기
+                self._sync_tree_tags() # 양쪽 표에 형광펜 칠하기
 
-    def remove_tag(self, item, f_val):
+    def remove_tag(self, f_val):
         if f_val in self.field_tags:
             del self.field_tags[f_val]
-            self.tree.item(item, tags=()) # 형광펜 지우기
+            self._sync_tree_tags() # 양쪽 표에서 형광펜 지우기
             self.hide_tree_tooltip()
 
     def on_tree_hover(self, event):
-        item = self.tree.identify_row(event.y)
+        active_tree = event.widget
+        item = active_tree.identify_row(event.y)
         if not item:
             self.hide_tree_tooltip()
             return
@@ -443,7 +486,7 @@ class OpticalCalculatorApp:
         if item != self.current_hover_item:
             self.hide_tree_tooltip()
             self.current_hover_item = item
-            f_val = self.tree.item(item, "values")[0]
+            f_val = active_tree.item(item, "values")[0]
             
             if f_val in self.field_tags:
                 x, y = event.x_root + 15, event.y_root + 15
@@ -629,8 +672,10 @@ class OpticalCalculatorApp:
         self.vars['enableMid'].set(False)
         self.vars['enableWide'].set(False)
 
-        for item in self.tree.get_children():
-            self.tree.delete(item)
+        for item in self.tree_m.get_children():
+            self.tree_m.delete(item)
+        for item in self.tree_r.get_children():
+            self.tree_r.delete(item)
         self.summary_label.config(text="")
 
     def save_file(self):
@@ -769,13 +814,23 @@ class OpticalCalculatorApp:
             
             # 4. 버전 비교
             if latest_version and latest_version != self.current_version:
-                user_clicked_ok = messagebox.askokcancel(
-                    "업데이트 알림", 
-                    f"새로운 업데이트가 있습니다!\n\n현재 버전: {self.current_version}\n최신 버전: {latest_version}\n\n깃허브에서 최신 버전을 다운로드해주세요."
-                )
-                if user_clicked_ok:
-                    github_page_url = "https://github.com/berkut03/Field-calculator/tree/main"
-                    webbrowser.open(github_page_url)
+                try:
+                    # 'v1.2.0' 같은 글자에서 'v'를 빼고 점(.)을 기준으로 쪼개서 숫자 리스트 [1, 2, 0]으로 만듦
+                    curr_v = [int(x) for x in self.current_version.lower().replace('v', '').strip().split('.')]
+                    late_v = [int(x) for x in latest_version.lower().replace('v', '').strip().split('.')]
+                    
+                    # 깃허브 버전(late_v)이 내 버전(curr_v)보다 "클 때만" 알림을 띄움
+                    if late_v > curr_v:
+                        user_clicked_ok = messagebox.askokcancel(
+                            "업데이트 알림", 
+                            f"새로운 업데이트가 있습니다!\n\n현재 버전: {self.current_version}\n최신 버전: {latest_version}\n\n깃허브에서 다운로드 페이지로 이동하시겠습니까?"
+                        )
+                        if user_clicked_ok:
+                            github_page_url = "https://github.com/berkut03/Field-calculator/tree/main"
+                            webbrowser.open(github_page_url)
+                except Exception:
+                    # 혹시나 깃허브에 실수로 숫자가 아닌 글자(예: '버전1')를 올려서 에러가 나면 프로그램이 뻗지 않고 조용히 넘어감
+                    pass
                 
         except Exception as e:
             # 💡 [디버깅용] 에러가 발생하면 무시하지 말고 팝업으로 띄워서 원인을 확인합니다.
