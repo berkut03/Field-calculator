@@ -7,6 +7,7 @@ import sys
 import urllib.request
 import ssl
 import webbrowser
+import math
 
 
 def resource_path(relative_path):
@@ -384,26 +385,32 @@ class OpticalCalculatorApp:
                 row_r = [f"{f:.2f}"] # 레티클(직경)용 행
 
                 if e_tele:
-                    row_m.append(f"{(fov_tele / 2) * f:.3f}")
-                    row_r.append(f"{(ic * f) * m_tele:.3f}")
+                    tele_a = (fov_tele / 2) * f
+                    row_m.append(f"{tele_a:.3f}")
+                    tele_d = ic * f
+                    row_r.append(f"{tele_d:.3f}")
                 else:
                     row_m.append("-"); row_r.append("-")
                 
                 if e_mid:
-                    row_m.append(f"{(fov_mid / 2) * f:.3f}")
-                    row_r.append(f"{(ic * f) * m_mid:.3f}")
+                    mid_a = (fov_mid / 2) * f
+                    row_m.append(f"{mid_a:.3f}")
+                    mid_d = ic * f
+                    row_r.append(f"{mid_d:.3f}")
                 else:
                     row_m.append("-"); row_r.append("-")
                     
                 if e_wide:
-                    row_m.append(f"{(fov_wide / 2) * f:.3f}")
-                    row_r.append(f"{(ic * f) * m_wide:.3f}")
+                    wide_a = (fov_wide / 2) * f
+                    row_m.append(f"{wide_a:.3f}")
+                    wide_d = ic * f
+                    row_r.append(f"{wide_d:.3f}")
                 else:
                     row_m.append("-"); row_r.append("-")
-
+                    
                 item_m = self.tree_m.insert("", tk.END, values=row_m)
                 item_r = self.tree_r.insert("", tk.END, values=row_r)
-
+                
                 f_str = f"{f:.2f}"
                 if f_str in self.field_tags:
                     self.tree_m.item(item_m, tags=('tagged',))
@@ -412,7 +419,7 @@ class OpticalCalculatorApp:
             # 요약 데이터
             summary = "[가공 및 세팅 참고 데이터]\n"
             def get_sum(mode, m):
-                return f"{mode:5s}: H패턴 가공크기 = {((roi_w/3)*p_mm)*m:.3f} mm  |  {int(roi_w)}x{int(roi_h)} ROI 영역 = {(roi_w*p_mm)*m:.3f} x {(roi_h*p_mm)*m:.3f} mm\n"
+                return f"{mode:5s}: H패턴 가공크기 = {((roi_w/3)*p_mm)/m:.3f} mm  |  {int(roi_w)}x{int(roi_h)} ROI 영역 = {(roi_w*p_mm)/m:.3f} x {(roi_h*p_mm)/m:.3f} mm\n"
             
             if e_tele: summary += get_sum("TELE", m_tele)
             if e_mid: summary += get_sum("MIDDLE", m_mid)
